@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
-import { Badge, Button, Card, EmptyState, Field } from '../components/ui.jsx'
-import Icon from '../components/Icon.jsx'
-import { money } from '../utils/format.js'
-import { profitability, salePriceFromProfitability } from '../utils/calculations.js'
+import { Badge, Button, Card, EmptyState, Field } from '../components/ui/index.jsx'
+import Icon from '../components/ui/Icon.jsx'
+import { money } from '../features/utils/format.js'
+import { profitability, salePriceFromProfitability } from '../features/utils/calculations.js'
 
 const PAGE_SIZE = 5
 const blank = { name: '', barcode: '', supplier: '', laboratory: '', cost: '', salePrice: '', stock: '', minStock: '' }

@@ -1,0 +1,6 @@
+import { store } from '../services/store.service.js'
+export const authController = { login: async (req, res) => res.json({ data: await store.login(req.body.username, req.body.password) }) }
+export const productController = { list: async (_req, res) => res.json({ data: await store.listProducts() }), save: async (req, res) => res.status(req.params.id ? 200 : 201).json({ data: await store.saveProduct(req.body, req.params.id) }) }
+export const userController = { list: async (_req, res) => res.json({ data: await store.listUsers() }), save: async (req, res) => res.status(req.params.id ? 200 : 201).json({ data: await store.saveUser(req.body, req.params.id) }), toggle: async (req, res) => res.json({ data: await store.toggleUser(req.params.id, req.user.id) }) }
+export const cashController = { current: async (_req, res) => res.json({ data: await store.currentCash() }), history: async (_req, res) => res.json({ data: await store.history() }), open: async (req, res) => res.status(201).json({ data: await store.openCash(req.body.initialAmount, req.user.id) }), close: async (req, res) => res.json({ data: await store.closeCash(req.body.countedAmount, req.user.id) }) }
+export const saleController = { create: async (req, res) => res.status(201).json({ data: await store.createSale(req.body.items, req.body.paymentMethod, req.user.id) }) }

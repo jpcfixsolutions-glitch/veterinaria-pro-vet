@@ -3,10 +3,11 @@ dist/
 .env
 .env.*
 !.env.example
+*.db
+*.db-*
 *.local
 *.log
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
-
