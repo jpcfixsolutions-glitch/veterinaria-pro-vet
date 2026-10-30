@@ -1,16 +1,23 @@
 import { Badge, Button, Card, EmptyState } from '../components/ui/index.jsx'
-import Icon from '../components/ui/Icon.jsx'
-import { money, time, today } from '../features/utils/format.js'
-import { expectedCash } from '../features/utils/calculations.js'
+import { dateTime, money, time, today } from '../features/utils/format.js'
+import TicketPayments from '../components/pos/TicketPayments.jsx'
 
-export default function DashboardPage({ user, products, cash, onNavigate }) {
+function TicketHistory({ cash, history }) {
+  const currentTickets = (cash?.tickets || []).map((ticket) => ({ ...ticket, register: 'Caja actual' }))
+  const closedTickets = history.flatMap((register) => (register.tickets || []).map((ticket) => ({ ...ticket, register: new Intl.DateTimeFormat('es-AR', { dateStyle: 'short' }).format(new Date(register.date)) })))
+  const tickets = [...currentTickets, ...closedTickets].sort((first, second) => new Date(second.createdAt) - new Date(first.createdAt))
+  return <Card className="dashboard-tickets"><div className="section-heading"><div><span className="eyebrow">OPERACIONES</span><h2>Historial de tickets</h2></div><Badge>{tickets.length} registros</Badge></div>{tickets.length ? <div className="table-scroll"><table className="dashboard-ticket-table"><thead><tr><th>Ticket</th><th>Fecha y hora</th><th>Medio de pago</th><th>Caja</th><th>Total</th></tr></thead><tbody>{tickets.map((ticket) => <tr key={ticket.id}><td><strong>{ticket.id}</strong></td><td>{dateTime(ticket.createdAt)}</td><td><TicketPayments ticket={ticket}/></td><td>{ticket.register}</td><td><strong>{money(ticket.total)}</strong></td></tr>)}</tbody></table></div> : <EmptyState icon="receipt" title="Todavía no hay tickets" detail="Las ventas registradas en la caja aparecerán acá." />}</Card>
+}
+
+export default function DashboardPage({ user, products, cash, history, onNavigate }) {
   const lowStock = products.filter((product) => product.stock <= product.minStock).length
   const sold = cash?.totalSales || 0
+  const cashIncome = Number(cash?.cashSales || 0)
+  const transferIncome = Number(cash?.virtualSales || 0)
+  const totalIncome = cashIncome + transferIncome
   return <div className="page-stack">
     <div className="page-heading"><div><span className="eyebrow">INICIO</span><h1>¡Bienvenido, {user.firstName}!</h1><p>{today()} · Resumen de tu operación.</p></div><Button icon="pos" onClick={() => onNavigate('pos')}>Nueva venta</Button></div>
-    <div className="metric-grid"><Card><span className="metric-label">ESTADO DE CAJA</span><strong className="metric-value">{cash ? 'Abierta' : 'Cerrada'}</strong><span className={cash ? 'metric-status good' : 'metric-status'}>{cash ? `Desde las ${time(cash.openedAt)}` : 'Abrila para vender'}</span></Card><Card><span className="metric-label">VENTAS DEL DÍA</span><strong className="metric-value">{money(sold)}</strong><span className="metric-status good">{cash?.tickets.length || 0} tickets en esta sesión</span></Card><Card><span className="metric-label">STOCK A REVISAR</span><strong className="metric-value">{lowStock}</strong><span className="metric-status warning">Productos en o bajo mínimo</span></Card><Card><span className="metric-label">EFECTIVO ESPERADO</span><strong className="metric-value">{money(expectedCash(cash))}</strong><span className="metric-status">Incluye fondo inicial y efectivo</span></Card></div>
-    <div className="dashboard-grid"><Card className="cash-overview"><div className="section-heading"><div><span className="eyebrow">CAJA DEL DÍA</span><h2>{cash ? 'Caja operativa' : 'Todavía no hay una caja abierta'}</h2></div><Badge tone={cash ? 'success' : 'neutral'}>{cash ? 'ABIERTA' : 'CERRADA'}</Badge></div>{cash ? <div className="cash-summary"><div><span>Abierta por</span><strong>{cash.openedBy}</strong></div><div><span>Fondo inicial</span><strong>{money(cash.initialAmount)}</strong></div><div><span>Ventas en efectivo</span><strong>{money(cash.cashSales)}</strong></div><Button variant="secondary" onClick={() => onNavigate('cash')}>Ver caja</Button></div> : <EmptyState icon="lock" title="Abrí la caja antes de vender" detail="Registrá el efectivo inicial y habilitá el punto de venta." action={<Button onClick={() => onNavigate('cash')}>Ir a Cajas</Button>} />}</Card>
-      <Card><div className="section-heading"><div><span className="eyebrow">ACCESOS RÁPIDOS</span><h2>Operaciones frecuentes</h2></div></div><div className="quick-actions"><button onClick={() => onNavigate('pos')}><Icon name="pos"/><span><strong>Registrar venta</strong><small>Carrito y medios de pago</small></span><Icon name="chevron"/></button><button onClick={() => onNavigate('stock')}><Icon name="stock"/><span><strong>Relevar stock</strong><small>Editar productos y precios</small></span><Icon name="chevron"/></button><button onClick={() => onNavigate('users')}><Icon name="users"/><span><strong>Administrar usuarios</strong><small>Altas, edición y estados</small></span><Icon name="chevron"/></button></div></Card>
-    </div>
+    <div className="metric-grid"><Card><span className="metric-label">ESTADO DE CAJA</span><strong className="metric-value">{cash ? 'Abierta' : 'Cerrada'}</strong><span className={cash ? 'metric-status good' : 'metric-status'}>{cash ? `Desde las ${time(cash.openedAt)}` : 'Abrila para vender'}</span></Card><Card><span className="metric-label">VENTAS DEL DÍA</span><strong className="metric-value">{money(sold)}</strong><span className="metric-status good">{cash?.tickets.length || 0} tickets en esta sesión</span></Card><Card><span className="metric-label">STOCK A REVISAR</span><strong className="metric-value">{lowStock}</strong><span className="metric-status warning">Productos en o bajo mínimo</span></Card><Card className="income-card"><span className="metric-label">TOTAL DE INGRESOS</span><strong className="metric-value">{money(totalIncome)}</strong><div className="income-breakdown"><span><small>Efectivo</small><strong>{money(cashIncome)}</strong></span><span><small>Transferencia</small><strong>{money(transferIncome)}</strong></span></div></Card></div>
+    <TicketHistory cash={cash} history={history} />
   </div>
 }

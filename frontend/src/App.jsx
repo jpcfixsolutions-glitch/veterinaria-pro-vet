@@ -6,6 +6,8 @@ import PosPage from './pages/PosPage.jsx'
 import StockPage from './pages/StockPage.jsx'
 import CashPage from './pages/CashPage.jsx'
 import UsersPage from './pages/UsersPage.jsx'
+import StatisticsPage from './pages/StatisticsPage.jsx'
+import SettingsPage from './pages/SettingsPage.jsx'
 import { Toast } from './components/ui/index.jsx'
 import { api } from './services/api/client.js'
 
@@ -36,7 +38,7 @@ export default function App() {
     notify('Producto guardado correctamente.')
   }
   const openCash = async (initialAmount) => setCash(await api.openCash(initialAmount))
-  const sale = async (cart, paymentMethod) => { if (!cash) throw new Error('No hay una caja abierta.'); const ticket = await api.sale(cart, paymentMethod); await refresh(); return ticket }
+  const sale = async (cart, payments) => { if (!cash) throw new Error('No hay una caja abierta.'); const ticket = await api.sale(cart, payments); await refresh(); return ticket }
   const closeCash = async (countedAmount) => { await api.closeCash(countedAmount); setCash(null); setCashHistory(await api.cashHistory()) }
   const saveUser = async (user) => {
     const next = await api.saveUser(user)
@@ -45,13 +47,16 @@ export default function App() {
     notify('Administrador guardado correctamente.')
   }
   const toggleUser = async (userId) => { const updated = await api.toggleUser(userId); setUsers((items) => items.map((user) => user.id === userId ? updated : user)); notify('Estado de cuenta actualizado.') }
+  const saveExpense = async (expense) => { await api.expense(expense); await refresh(); notify('Gasto registrado correctamente.') }
 
   if (!currentUser) return <LoginPage onLogin={login} />
   const pages = {
-    dashboard: <DashboardPage user={currentUser} products={products} cash={cash} onNavigate={setPage} />,
+    dashboard: <DashboardPage user={currentUser} products={products} cash={cash} history={cashHistory} onNavigate={setPage} />,
     pos: <PosPage products={products} cash={cash} onNavigate={setPage} onSale={sale} />,
     stock: <StockPage products={products} onSaveProduct={saveProduct} />,
     cash: <CashPage cash={cash} history={cashHistory} user={currentUser} onOpen={openCash} onClose={closeCash} />,
+    stats: <StatisticsPage api={api.statistics} onExpense={saveExpense} />,
+    settings: <SettingsPage api={api} notify={notify} />,
     users: <UsersPage users={users} currentUser={currentUser} onSaveUser={saveUser} onToggleUser={toggleUser} />,
   }
   return <><AppLayout activePage={page} onNavigate={setPage} user={currentUser} cashOpen={Boolean(cash)} onLogout={() => { localStorage.removeItem('provet_token'); setCurrentUser(null); setPage('dashboard') }}>{pages[page]}</AppLayout><Toast toast={toast} onClose={() => setToast(null)} /></>

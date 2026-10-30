@@ -1,7 +1,7 @@
 export function profitability(cost, salePrice) {
   const base = Number(cost)
-  if (!base || base <= 0) return 0
-  return ((Number(salePrice) - base) / base) * 100
+  if (!base || base <= 0) return null
+  return Math.round(((Number(salePrice) - base) / base) * 10000) / 100
 }
 
 export function salePriceFromProfitability(cost, percentage) {
