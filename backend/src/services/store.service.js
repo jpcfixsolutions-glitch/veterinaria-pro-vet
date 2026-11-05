@@ -86,7 +86,46 @@ export const store = {
     const operatingExpenses = expenseRows.reduce((sum, expense) => sum + Number(expense.amount), 0)
     const inventory = (await db.select().from(products).all()).reduce((sum, product) => sum + Number(product.stock) * Number(product.cost), 0)
     const net = grossSales - costOfSales - operatingExpenses
-    return { start, end, grossSales, cashSales: paymentTotals.Efectivo || 0, virtualSales: paymentTotals.Virtual || 0, costOfSales, operatingExpenses, inventory, net, profitability: grossSales ? (net / grossSales) * 100 : null, expenses: expenseRows }
+    const dailySales = Object.values(salesRows.reduce((days, sale) => {
+      const day = sale.createdAt.slice(0, 10)
+      days[day] ||= { date: day, total: 0, tickets: 0 }
+      days[day].total += Number(sale.total)
+      days[day].tickets += 1
+      return days
+    }, {})).sort((a, b) => a.date.localeCompare(b.date))
+    const topProducts = Object.values(items.reduce((rows, item) => {
+      rows[item.productId] ||= { id: item.productId, name: item.productName, quantity: 0, revenue: 0 }
+      rows[item.productId].quantity += Number(item.quantity)
+      rows[item.productId].revenue += Number(item.unitPrice) * Number(item.quantity)
+      return rows
+    }, {})).sort((a, b) => b.quantity - a.quantity || b.revenue - a.revenue).slice(0, 8)
+    const itemsSold = items.reduce((sum, item) => sum + Number(item.quantity), 0)
+    return { start, end, grossSales, cashSales: paymentTotals.Efectivo || 0, virtualSales: paymentTotals.Virtual || 0, costOfSales, operatingExpenses, inventory, net, profitability: grossSales ? (net / grossSales) * 100 : null, expenses: expenseRows, dailySales, topProducts, ticketCount: salesRows.length, itemsSold, averageTicket: salesRows.length ? grossSales / salesRows.length : 0 }
+  },
+  async statisticsHistory() {
+    const salesRows = await db.select().from(sales).all()
+    const items = await db.select().from(saleItems).all()
+    const expenseRows = await db.select().from(expenses).where(eq(expenses.status, 'ACTIVE')).all()
+    const saleMonths = new Map(salesRows.map((sale) => [sale.id, sale.createdAt.slice(0, 7)]))
+    const months = {}
+    for (const sale of salesRows) {
+      const key = sale.createdAt.slice(0, 7)
+      months[key] ||= { key, grossSales: 0, costOfSales: 0, operatingExpenses: 0, ticketCount: 0 }
+      months[key].grossSales += Number(sale.total)
+      months[key].ticketCount += 1
+    }
+    for (const item of items) {
+      const key = saleMonths.get(item.saleId)
+      if (!key) continue
+      months[key] ||= { key, grossSales: 0, costOfSales: 0, operatingExpenses: 0, ticketCount: 0 }
+      months[key].costOfSales += (Number(item.unitCost) || 0) * Number(item.quantity)
+    }
+    for (const expense of expenseRows) {
+      const key = expense.expenseAt.slice(0, 7)
+      months[key] ||= { key, grossSales: 0, costOfSales: 0, operatingExpenses: 0, ticketCount: 0 }
+      months[key].operatingExpenses += Number(expense.amount)
+    }
+    return Object.values(months).map((month) => ({ ...month, net: month.grossSales - month.costOfSales - month.operatingExpenses })).sort((a, b) => b.key.localeCompare(a.key))
   },
   async createExpense(input, userId) {
     ensure(input.description?.trim() && ['alquiler', 'servicios', 'impuestos', 'sueldos', 'mantenimiento', 'proveedores', 'otros'].includes(input.category), 'Completá motivo y categoría.'); ensure(Number.isFinite(Number(input.amount)) && Number(input.amount) > 0, 'Ingresá un monto válido.'); ensure(['Efectivo', 'Virtual'].includes(input.paymentMethod), 'Medio de pago inválido.')

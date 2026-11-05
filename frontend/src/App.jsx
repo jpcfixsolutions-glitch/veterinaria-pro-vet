@@ -55,7 +55,7 @@ export default function App() {
     pos: <PosPage products={products} cash={cash} onNavigate={setPage} onSale={sale} />,
     stock: <StockPage products={products} onSaveProduct={saveProduct} />,
     cash: <CashPage cash={cash} history={cashHistory} user={currentUser} onOpen={openCash} onClose={closeCash} />,
-    stats: <StatisticsPage api={api.statistics} onExpense={saveExpense} />,
+    stats: <StatisticsPage api={api.statistics} historyApi={api.statisticsHistory} onExpense={saveExpense} />,
     settings: <SettingsPage api={api} notify={notify} />,
     users: <UsersPage users={users} currentUser={currentUser} onSaveUser={saveUser} onToggleUser={toggleUser} />,
   }
