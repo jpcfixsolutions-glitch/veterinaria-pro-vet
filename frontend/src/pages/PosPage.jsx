@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Badge, Button, Card, EmptyState, Field } from '../components/ui/index.jsx'
 import Icon from '../components/ui/Icon.jsx'
 import PaymentModal from '../components/pos/PaymentModal.jsx'
+import TicketPrint from '../components/pos/TicketPrint.jsx'
 import { money, time } from '../features/utils/format.js'
 import { useBarcodeScanner } from '../hooks/useBarcodeScanner.js'
 
@@ -29,7 +30,7 @@ function CartContents({ cart, total, loading, onQuantity, onRemove, onCheckout }
   </>
 }
 
-export default function PosPage({ products, cash, onNavigate, onSale, api, notify }) {
+export default function PosPage({ products, cash, paymentMethods, onNavigate, onSale, api, notify }) {
   const [supplier, setSupplier] = useState('')
   const [page, setPage] = useState(1)
   const [cart, setCart] = useState([])
@@ -39,6 +40,8 @@ export default function PosPage({ products, cash, onNavigate, onSale, api, notif
   const [checkout, setCheckout] = useState(false)
   const cartRef = useRef([])
   const submitting = useRef(false)
+  const saleKey = useRef(null)
+  const [printedTicket, setPrintedTicket] = useState(null)
   const scanner = useBarcodeScanner({
     disabled: loading || checkout,
     onScan: async (barcode) => {
@@ -54,7 +57,7 @@ export default function PosPage({ products, cash, onNavigate, onSale, api, notif
     },
   })
   const suppliers = useMemo(() => [...new Set(products.map((item) => item.supplier).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es')), [products])
-  const results = useMemo(() => products.filter((item) => (!supplier || item.supplier === supplier) && normalize(`${item.name} ${item.barcode}`).includes(normalize(scanner.value))).sort((a, b) => a.name.localeCompare(b.name, 'es')), [products, scanner.value, supplier])
+  const results = useMemo(() => products.filter((item) => item.active !== false && item.productStatus !== 'I' && (!supplier || item.supplier === supplier) && normalize(`${item.name} ${item.barcode}`).includes(normalize(scanner.value))).sort((a, b) => a.name.localeCompare(b.name, 'es')), [products, scanner.value, supplier])
   const pageCount = Math.max(1, Math.ceil(results.length / PAGE_SIZE))
   const currentPage = Math.min(page, pageCount)
   const start = (currentPage - 1) * PAGE_SIZE
@@ -83,13 +86,13 @@ export default function PosPage({ products, cash, onNavigate, onSale, api, notif
     if (!exact && results.length === 1) { event.preventDefault(); add(results[0]); return }
     scanner.onKeyDown(event)
   }
-  const openCheckout = () => { setMobileCart(false); setStatus(null); setCheckout(true) }
+  const openCheckout = () => { saleKey.current = crypto.randomUUID(); setMobileCart(false); setStatus(null); setCheckout(true) }
   const pay = async (payments) => {
     if (!cart.length || submitting.current) return
     submitting.current = true; setLoading(true); setStatus(null)
     try {
-      const ticket = await onSale(cart, payments)
-      setCart([]); setCheckout(false); setStatus({ type: 'success', message: `Ticket ${ticket.id} generado correctamente.` })
+      const ticket = await onSale(cart, payments, saleKey.current)
+      saleKey.current = null; setCart([]); setCheckout(false); setPrintedTicket(ticket); setStatus({ type: 'success', message: `Ticket ${ticket.id} generado correctamente.` })
       scanner.inputRef.current?.focus()
     } catch (error) { setStatus({ type: 'error', message: error.message }) }
     finally { submitting.current = false; setLoading(false) }
@@ -101,7 +104,7 @@ export default function PosPage({ products, cash, onNavigate, onSale, api, notif
   return <div className="pv-pos">
     <section className="pv-pos-catalog" aria-label="Catálogo de productos">
       <div className="page-heading"><div><span className="eyebrow">VENTAS · DESDE LAS {time(cash.openedAt)}</span><h1>Punto de venta</h1></div><Badge tone="success">Caja abierta</Badge></div>
-      {status && !checkout && <div role="status" className={`inline-message ${status.type}`}><Icon name={status.type === 'error' ? 'alert' : 'check'} /><span>{status.message}</span><button onClick={() => setStatus(null)} aria-label="Cerrar aviso"><Icon name="close" size={16}/></button></div>}
+      {status && !checkout && <div role="status" className={`inline-message ${status.type}`}><Icon name={status.type === 'error' ? 'alert' : 'check'} /><span>{status.message}</span>{printedTicket && status.type === 'success' && <button type="button" onClick={() => window.print()}>Imprimir ticket</button>}<button onClick={() => setStatus(null)} aria-label="Cerrar aviso"><Icon name="close" size={16}/></button></div>}
       <div className="pv-pos-filters"><label className="pos-search"><Icon name="search"/><input ref={scanner.inputRef} aria-label="Buscar producto o escanear código de barras" value={scanner.value} onChange={(event) => { scanner.setValue(event.target.value); setPage(1) }} onKeyDown={handleSearchKeyDown} placeholder="Buscar o escanear código de barras..." />{scanner.value && <button type="button" className="icon-button" onClick={() => { scanner.setValue(''); setPage(1); scanner.inputRef.current?.focus() }} aria-label="Limpiar búsqueda"><Icon name="close" size={16}/></button>}{scanner.isScanning ? <span className="pv-scanner-status">Buscando…</span> : <kbd>Enter</kbd>}</label><p className="pv-pos-search-hint">Escaneá un código o ingresalo y presioná Enter para agregarlo al carrito.</p><Field label="PROVEEDOR"><select value={supplier} onChange={(event) => { setSupplier(event.target.value); setPage(1) }}><option value="">Todos los proveedores</option>{suppliers.map((name) => <option key={name} value={name}>{name}</option>)}</select></Field></div>
       <div className="pv-pos-products">{results.length ? results.slice(start, start + PAGE_SIZE).map((product) => {
         const remaining = product.stock - (cart.find((item) => item.id === product.id)?.quantity || 0)
@@ -112,6 +115,7 @@ export default function PosPage({ products, cash, onNavigate, onSale, api, notif
     <aside className="pv-pos-cart" aria-label="Carrito de venta"><CartContents {...cartProps} /></aside>
     <button className="pv-pos-mobile-cart" onClick={() => setMobileCart(true)} aria-label={`Abrir carrito, ${count} productos, ${money(total)}`}><Icon name="pos"/><span>{count} productos</span><strong>{money(total)}</strong></button>
     {mobileCart && <PosDialog title="Venta actual" className="pv-pos-cart-sheet" onClose={() => setMobileCart(false)}><CartContents {...cartProps} /></PosDialog>}
-    {checkout && <PosDialog title="Procesar Pago" className="pv-payment-dialog" onClose={() => setCheckout(false)} busy={loading}><PaymentModal total={total} loading={loading} error={status?.type === 'error' ? status.message : null} onClose={() => setCheckout(false)} onConfirm={pay} /></PosDialog>}
+    {checkout && <PosDialog title="Procesar Pago" className="pv-payment-dialog" onClose={() => { saleKey.current = null; setCheckout(false) }} busy={loading}><PaymentModal total={total} methods={paymentMethods} loading={loading} error={status?.type === 'error' ? status.message : null} onClose={() => { saleKey.current = null; setCheckout(false) }} onConfirm={pay} /></PosDialog>}
+    {printedTicket && <TicketPrint ticket={printedTicket} />}
   </div>
 }

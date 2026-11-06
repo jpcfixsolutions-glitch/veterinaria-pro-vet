@@ -68,7 +68,7 @@ function SettingsCard({ section, items, onEdit, onDeactivate, onCreate }) {
   </Card>
 }
 
-export default function SettingsPage({ api, notify }) {
+export default function SettingsPage({ api, notify, onUpdated }) {
   const [data, setData] = useState({ payment: [], category: [], supplier: [], laboratory: [], fixed: [] })
   const [editing, setEditing] = useState(null)
   const [confirming, setConfirming] = useState(null)
@@ -94,7 +94,7 @@ export default function SettingsPage({ api, notify }) {
     setSaving(true); setError('')
     try {
       await (editing.section === 'fixed' ? api.saveFixedExpense(item) : api.saveSetting(editing.section, item))
-      setEditing(null); await load(); notify('Configuración guardada correctamente.')
+      setEditing(null); await load(); await onUpdated?.(); notify('Configuración guardada correctamente.')
     } catch (err) { setError(err.message) } finally { setSaving(false) }
   }
   const deactivate = async () => {
@@ -103,7 +103,7 @@ export default function SettingsPage({ api, notify }) {
     try {
       const { section, item } = confirming
       await (section === 'fixed' ? api.saveFixedExpense({ ...item, active: false }) : api.saveSetting(section, { ...item, active: false }))
-      setConfirming(null); await load(); notify(`${item.name} se desactivó correctamente.`)
+      setConfirming(null); await load(); await onUpdated?.(); notify(`${item.name} se desactivó correctamente.`)
     } catch (err) { setError(err.message) } finally { setSaving(false) }
   }
   const section = editing && sectionFor(editing.section)

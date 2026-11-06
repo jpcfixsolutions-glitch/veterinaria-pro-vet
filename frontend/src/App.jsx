@@ -16,14 +16,15 @@ export default function App() {
   const [products, setProducts] = useState([])
   const [cash, setCash] = useState(null)
   const [cashHistory, setCashHistory] = useState([])
+  const [paymentMethods, setPaymentMethods] = useState([])
   const [currentUser, setCurrentUser] = useState(null)
   const [page, setPage] = useState('dashboard')
   const [toast, setToast] = useState(null)
   const notify = (message, type = 'success') => setToast({ message, type })
 
   const refresh = async () => {
-    const [nextProducts, nextUsers, nextCash, nextHistory] = await Promise.all([api.products(), api.users(), api.currentCash(), api.cashHistory()])
-    setProducts(nextProducts); setUsers(nextUsers); setCash(nextCash); setCashHistory(nextHistory)
+    const [nextProducts, nextUsers, nextCash, nextHistory, nextPaymentMethods] = await Promise.all([api.products(), api.users(), api.currentCash(), api.cashHistory(), api.settings('payment')])
+    setProducts(nextProducts); setUsers(nextUsers); setCash(nextCash); setCashHistory(nextHistory); setPaymentMethods(nextPaymentMethods.filter((method) => method.active))
   }
   useEffect(() => { if (currentUser) refresh().catch((error) => notify(error.message, 'error')) }, [currentUser])
 
@@ -38,8 +39,9 @@ export default function App() {
     notify('Producto guardado correctamente.')
   }
   const openCash = async (initialAmount) => setCash(await api.openCash(initialAmount))
-  const sale = async (cart, payments) => { if (!cash) throw new Error('No hay una caja abierta.'); const ticket = await api.sale(cart, payments); await refresh(); return ticket }
-  const closeCash = async (countedAmount) => { await api.closeCash(countedAmount); setCash(null); setCashHistory(await api.cashHistory()) }
+  const sale = async (cart, payments, idempotencyKey) => { if (!cash) throw new Error('No hay una caja abierta.'); const ticket = await api.sale(cart, payments, idempotencyKey); await refresh(); return ticket }
+  const closeCash = (countedAmount) => api.closeCash(countedAmount)
+  const finishCashClose = async () => { setCash(null); setCashHistory(await api.cashHistory()) }
   const saveUser = async (user) => {
     const next = await api.saveUser(user)
     setUsers((items) => user.id ? items.map((item) => item.id === user.id ? next : item) : [...items, next])
@@ -52,11 +54,11 @@ export default function App() {
   if (!currentUser) return <LoginPage onLogin={login} />
   const pages = {
     dashboard: <DashboardPage user={currentUser} products={products} cash={cash} history={cashHistory} onNavigate={setPage} />,
-    pos: <PosPage products={products} cash={cash} onNavigate={setPage} onSale={sale} api={api} notify={notify} />,
+    pos: <PosPage products={products} cash={cash} paymentMethods={paymentMethods} onNavigate={setPage} onSale={sale} api={api} notify={notify} />,
     stock: <StockPage products={products} onSaveProduct={saveProduct} api={api} notify={notify} />,
-    cash: <CashPage cash={cash} history={cashHistory} user={currentUser} onOpen={openCash} onClose={closeCash} />,
-    stats: <StatisticsPage api={api.statistics} historyApi={api.statisticsHistory} onExpense={saveExpense} />,
-    settings: <SettingsPage api={api} notify={notify} />,
+    cash: <CashPage cash={cash} history={cashHistory} user={currentUser} onOpen={openCash} onClose={closeCash} onCloseComplete={finishCashClose} />,
+    stats: <StatisticsPage api={api.statistics} historyApi={api.statisticsHistory} auditApi={api.statisticsAudit} onExpense={saveExpense} cash={cash} cashHistory={cashHistory} />,
+    settings: <SettingsPage api={api} notify={notify} onUpdated={refresh} />,
     users: <UsersPage users={users} currentUser={currentUser} onSaveUser={saveUser} onToggleUser={toggleUser} />,
   }
   return <><AppLayout activePage={page} onNavigate={setPage} user={currentUser} cashOpen={Boolean(cash)} onLogout={() => { localStorage.removeItem('provet_token'); setCurrentUser(null); setPage('dashboard') }}>{pages[page]}</AppLayout><Toast toast={toast} onClose={() => setToast(null)} /></>

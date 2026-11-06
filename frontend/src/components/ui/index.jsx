@@ -1,8 +1,9 @@
+import { forwardRef } from 'react'
 import Icon from './Icon.jsx'
 
-export function Button({ children, variant = 'primary', icon, loading, className = '', ...props }) {
-  return <button className={`button button-${variant} ${className}`} disabled={loading || props.disabled} {...props}>{loading ? <Icon name="spinner" /> : icon && <Icon name={icon} />}<span>{children}</span></button>
-}
+export const Button = forwardRef(function Button({ children, variant = 'primary', icon, loading, success, className = '', ...props }, ref) {
+  return <button ref={ref} className={`button button-${success ? 'success' : variant} ${loading ? 'is-loading' : ''} ${success ? 'is-success' : ''} ${className}`} disabled={loading || props.disabled} aria-busy={loading || undefined} {...props}>{loading ? <Icon name="spinner" /> : success ? <Icon name="check" /> : icon && <Icon name={icon} />}<span>{children}</span></button>
+})
 
 export function Card({ children, className = '' }) { return <section className={`card ${className}`}>{children}</section> }
 
