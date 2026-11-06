@@ -9,3 +9,5 @@ app.use(express.json({ limit: '1mb' }))
 app.get('/health', (_req, res) => res.json({ status: 'ok' }))
 app.use('/api', apiRouter)
 app.use(notFound); app.use(errorHandler)
+
+export default app
