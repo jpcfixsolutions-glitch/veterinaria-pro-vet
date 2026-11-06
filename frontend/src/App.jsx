@@ -52,8 +52,8 @@ export default function App() {
   if (!currentUser) return <LoginPage onLogin={login} />
   const pages = {
     dashboard: <DashboardPage user={currentUser} products={products} cash={cash} history={cashHistory} onNavigate={setPage} />,
-    pos: <PosPage products={products} cash={cash} onNavigate={setPage} onSale={sale} />,
-    stock: <StockPage products={products} onSaveProduct={saveProduct} />,
+    pos: <PosPage products={products} cash={cash} onNavigate={setPage} onSale={sale} api={api} notify={notify} />,
+    stock: <StockPage products={products} onSaveProduct={saveProduct} api={api} notify={notify} />,
     cash: <CashPage cash={cash} history={cashHistory} user={currentUser} onOpen={openCash} onClose={closeCash} />,
     stats: <StatisticsPage api={api.statistics} historyApi={api.statisticsHistory} onExpense={saveExpense} />,
     settings: <SettingsPage api={api} notify={notify} />,

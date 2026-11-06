@@ -151,6 +151,10 @@ input:focus, select:focus { border-color: var(--pv-red); box-shadow: 0 0 0 3px r
 .pv-pos-search-hint { margin: 10px 0 0; color: var(--pv-muted); font-size: .73rem; line-height: 1.5; }
 .pv-pos-products { display: grid; gap: 12px; }
 .pv-stock-toolbar { align-items: flex-start; flex-wrap: wrap; }
+.pv-barcode-scanner { min-width: min(100%, 320px); background: #fffafa; }
+.pv-barcode-scanner .icon { color: var(--pv-red); }
+.pv-scanner-status { color: var(--pv-red); font-size: .7rem; font-weight: 700; white-space: nowrap; }
+.pv-barcode-scanner kbd, .pos-search kbd { padding: 3px 6px; border: 1px solid var(--pv-border); border-bottom-width: 2px; border-radius: 4px; color: var(--pv-muted); font-size: .65rem; white-space: nowrap; }
 .pv-stock-filters { display: flex; flex: 1 1 540px; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .pv-stock-filters select { min-width: 128px; flex: 1 1 128px; }
 .pv-stock-table { min-width: 1430px; }

@@ -3,6 +3,7 @@ import { Badge, Button, Card, EmptyState, Field } from '../components/ui/index.j
 import Icon from '../components/ui/Icon.jsx'
 import PaymentModal from '../components/pos/PaymentModal.jsx'
 import { money, time } from '../features/utils/format.js'
+import { useBarcodeScanner } from '../hooks/useBarcodeScanner.js'
 
 const PAGE_SIZE = 12
 const normalize = (value) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
@@ -28,8 +29,7 @@ function CartContents({ cart, total, loading, onQuantity, onRemove, onCheckout }
   </>
 }
 
-export default function PosPage({ products, cash, onNavigate, onSale }) {
-  const [query, setQuery] = useState('')
+export default function PosPage({ products, cash, onNavigate, onSale, api, notify }) {
   const [supplier, setSupplier] = useState('')
   const [page, setPage] = useState(1)
   const [cart, setCart] = useState([])
@@ -37,28 +37,51 @@ export default function PosPage({ products, cash, onNavigate, onSale }) {
   const [loading, setLoading] = useState(false)
   const [mobileCart, setMobileCart] = useState(false)
   const [checkout, setCheckout] = useState(false)
-  const inputRef = useRef(null)
+  const cartRef = useRef([])
   const submitting = useRef(false)
+  const scanner = useBarcodeScanner({
+    disabled: loading || checkout,
+    onScan: async (barcode) => {
+      try {
+        const product = await api.productByBarcode(barcode)
+        add(product)
+      } catch (error) {
+        const message = error.status === 404
+          ? `Producto no encontrado. El código de barras ${barcode} no está registrado en el sistema.`
+          : 'No se pudo buscar el producto. Verificá la conexión e intentá nuevamente.'
+        setStatus({ type: 'error', message }); notify(message, 'error')
+      }
+    },
+  })
   const suppliers = useMemo(() => [...new Set(products.map((item) => item.supplier).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es')), [products])
-  const results = useMemo(() => products.filter((item) => (!supplier || item.supplier === supplier) && normalize(`${item.name} ${item.barcode}`).includes(normalize(query))).sort((a, b) => a.name.localeCompare(b.name, 'es')), [products, query, supplier])
+  const results = useMemo(() => products.filter((item) => (!supplier || item.supplier === supplier) && normalize(`${item.name} ${item.barcode}`).includes(normalize(scanner.value))).sort((a, b) => a.name.localeCompare(b.name, 'es')), [products, scanner.value, supplier])
   const pageCount = Math.max(1, Math.ceil(results.length / PAGE_SIZE))
   const currentPage = Math.min(page, pageCount)
   const start = (currentPage - 1) * PAGE_SIZE
   const total = cart.reduce((sum, item) => sum + item.salePrice * item.quantity, 0)
   const count = cart.reduce((sum, item) => sum + item.quantity, 0)
 
+  useEffect(() => { cartRef.current = cart }, [cart])
   const add = (product) => {
     if (loading) return
-    const exists = cart.find((item) => item.id === product.id)
-    if (product.stock <= 0 || (exists && exists.quantity >= product.stock)) return setStatus({ type: 'error', message: `No hay más unidades disponibles de ${product.name}.` })
-    setCart((items) => exists ? items.map((item) => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item) : [...items, { ...product, quantity: 1 }])
-    setQuery(''); setPage(1); inputRef.current?.focus()
+    if (product.productStatus === 'I' || product.active === false) { const message = `${product.name} está inactivo y no puede venderse.`; setStatus({ type: 'error', message }); notify(message, 'error'); return }
+    const exists = cartRef.current.find((item) => item.id === product.id)
+    if (product.stock <= 0 || (exists && exists.quantity >= product.stock)) { const message = `No hay más unidades disponibles de ${product.name}.`; setStatus({ type: 'error', message }); notify(message, 'error'); return }
+    const next = exists ? cartRef.current.map((item) => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item) : [...cartRef.current, { ...product, quantity: 1 }]
+    cartRef.current = next; setCart(next); scanner.setValue(''); setPage(1)
+    notify(exists ? `${product.name}: cantidad actualizada.` : `${product.name} agregado al carrito.`)
   }
   const changeQuantity = (id, quantity) => {
     const item = cart.find((line) => line.id === id)
     if (!item || !Number.isInteger(quantity) || quantity < 1 || loading) return
     if (quantity > item.stock) return setStatus({ type: 'error', message: `Stock máximo disponible: ${item.stock}.` })
     setCart((items) => items.map((line) => line.id === id ? { ...line, quantity } : line))
+  }
+  const handleSearchKeyDown = (event) => {
+    if (event.key !== 'Enter') return
+    const exact = products.find((product) => String(product.barcode) === scanner.value.trim())
+    if (!exact && results.length === 1) { event.preventDefault(); add(results[0]); return }
+    scanner.onKeyDown(event)
   }
   const openCheckout = () => { setMobileCart(false); setStatus(null); setCheckout(true) }
   const pay = async (payments) => {
@@ -67,7 +90,7 @@ export default function PosPage({ products, cash, onNavigate, onSale }) {
     try {
       const ticket = await onSale(cart, payments)
       setCart([]); setCheckout(false); setStatus({ type: 'success', message: `Ticket ${ticket.id} generado correctamente.` })
-      inputRef.current?.focus()
+      scanner.inputRef.current?.focus()
     } catch (error) { setStatus({ type: 'error', message: error.message }) }
     finally { submitting.current = false; setLoading(false) }
   }
@@ -79,7 +102,7 @@ export default function PosPage({ products, cash, onNavigate, onSale }) {
     <section className="pv-pos-catalog" aria-label="Catálogo de productos">
       <div className="page-heading"><div><span className="eyebrow">VENTAS · DESDE LAS {time(cash.openedAt)}</span><h1>Punto de venta</h1></div><Badge tone="success">Caja abierta</Badge></div>
       {status && !checkout && <div role="status" className={`inline-message ${status.type}`}><Icon name={status.type === 'error' ? 'alert' : 'check'} /><span>{status.message}</span><button onClick={() => setStatus(null)} aria-label="Cerrar aviso"><Icon name="close" size={16}/></button></div>}
-      <div className="pv-pos-filters"><label className="pos-search"><Icon name="search"/><input ref={inputRef} aria-label="Buscar producto o código de barras" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1) }} onKeyDown={(event) => { if (event.key !== 'Enter' || !query.trim()) return; const exact = products.find((product) => String(product.barcode) === query.trim()); if (exact || results.length === 1) { event.preventDefault(); add(exact || results[0]) } }} placeholder="Buscar o escanear código de barras..." />{query && <button type="button" className="icon-button" onClick={() => { setQuery(''); setPage(1); inputRef.current?.focus() }} aria-label="Limpiar búsqueda"><Icon name="close" size={16}/></button>}<kbd>Enter</kbd></label><p className="pv-pos-search-hint">Escaneá un código o ingresalo y presioná Enter para agregarlo al carrito.</p><Field label="PROVEEDOR"><select value={supplier} onChange={(event) => { setSupplier(event.target.value); setPage(1) }}><option value="">Todos los proveedores</option>{suppliers.map((name) => <option key={name} value={name}>{name}</option>)}</select></Field></div>
+      <div className="pv-pos-filters"><label className="pos-search"><Icon name="search"/><input ref={scanner.inputRef} aria-label="Buscar producto o escanear código de barras" value={scanner.value} onChange={(event) => { scanner.setValue(event.target.value); setPage(1) }} onKeyDown={handleSearchKeyDown} placeholder="Buscar o escanear código de barras..." />{scanner.value && <button type="button" className="icon-button" onClick={() => { scanner.setValue(''); setPage(1); scanner.inputRef.current?.focus() }} aria-label="Limpiar búsqueda"><Icon name="close" size={16}/></button>}{scanner.isScanning ? <span className="pv-scanner-status">Buscando…</span> : <kbd>Enter</kbd>}</label><p className="pv-pos-search-hint">Escaneá un código o ingresalo y presioná Enter para agregarlo al carrito.</p><Field label="PROVEEDOR"><select value={supplier} onChange={(event) => { setSupplier(event.target.value); setPage(1) }}><option value="">Todos los proveedores</option>{suppliers.map((name) => <option key={name} value={name}>{name}</option>)}</select></Field></div>
       <div className="pv-pos-products">{results.length ? results.slice(start, start + PAGE_SIZE).map((product) => {
         const remaining = product.stock - (cart.find((item) => item.id === product.id)?.quantity || 0)
         return <article key={product.id} className={`pv-pos-product ${product.stock <= 0 ? 'pv-pos-out-of-stock' : ''}`}><div className="pv-pos-product-details"><span className="pv-pos-product-icon"><Icon name="stock" size={22}/></span><div><h3>{product.name}</h3><p>{product.barcode} · Stock: {product.stock} u.</p>{product.supplier && <small>{product.supplier}</small>}{product.stock <= product.minStock && <Badge tone={product.stock <= 0 ? 'neutral' : 'warning'}>{product.stock <= 0 ? 'Sin stock' : 'Stock bajo'}</Badge>}</div></div><div className="pv-pos-product-actions"><strong>{money(product.salePrice)}</strong><Button icon="plus" disabled={remaining <= 0 || loading} onClick={() => add(product)} aria-label={`Agregar ${product.name}`} /></div></article>

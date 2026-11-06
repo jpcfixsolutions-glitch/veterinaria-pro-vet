@@ -36,7 +36,9 @@ test('persistencia, stock, arqueo e historial con base temporal aislada', async 
       await client.executeMultiple(await readFile(new URL(`../../drizzle/${migration}.sql`, import.meta.url), 'utf8'))
     }
     await client.execute("INSERT INTO users VALUES ('admin', 'Admin', 'Prueba', 'test', 'test', 'unused', 'ADMIN', 1, '2026-10-30', '2026-10-30')")
-    await client.execute("INSERT INTO products (id, name, barcode, supplier, laboratory, cost, sale_price, stock, min_stock, active, created_at, updated_at) VALUES ('product', 'Producto prueba', '123', 'Proveedor', 'Laboratorio', 10, 100, 10, 1, 1, '2026-10-30', '2026-10-30')")
+    await client.execute("INSERT INTO products (id, name, barcode, supplier, laboratory, cost, sale_price, stock, min_stock, active, created_at, updated_at) VALUES ('product', 'Producto prueba', '00123', 'Proveedor', 'Laboratorio', 10, 100, 10, 1, 1, '2026-10-30', '2026-10-30')")
+    assert.equal((await store.findProductByBarcode(' 00123 ')).id, 'product')
+    await assert.rejects(store.findProductByBarcode('99999'), { message: 'Producto no encontrado.' })
     await store.openCash(50, 'admin')
     const sale = await store.createSale([{ productId: 'product', quantity: 1 }], [{ method: 'Efectivo', amount: 30 }, { method: 'Virtual', amount: 70 }], 'admin')
     assert.equal(sale.paymentMethod, 'Combinado')
